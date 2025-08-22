@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, Request, UploadFile, Form, File
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sentence_transformers import SentenceTransformer, util
@@ -174,6 +174,44 @@ async def index(request: Request):
         "model_configs": MODEL_CONFIGS,
         "default_model": DEFAULT_MODEL
     })
+
+@app.get("/landing", response_class=HTMLResponse)
+async def landing(request: Request):
+    return templates.TemplateResponse("landing.html", {"request": request})
+
+@app.get("/scrape", response_class=HTMLResponse)
+async def scrape_page(request: Request):
+    return templates.TemplateResponse("scrape.html", {"request": request})
+
+@app.post("/scrape/run")
+async def scrape_run(
+    company_url: str = Form(...),
+    mode: str = Form("pages"),
+    max_pages: str = Form(""),
+    months: str = Form(""),
+    keywords: str = Form(""),
+    resume: str = Form("no"),
+):
+    import subprocess, shlex
+    # Build command
+    script_path = str(APP_DIR / "scrape_reviews.py")
+    args = ["python", script_path, "--url", company_url]
+    if mode == "pages" and max_pages.strip():
+        args += ["--pages", max_pages.strip()]
+    if mode == "months" and months.strip():
+        args += ["--months", months.strip()]
+    if mode == "keywords" and keywords.strip():
+        args += ["--keywords", keywords.strip()]
+    if resume == "yes":
+        args += ["--resume"]
+
+    try:
+        proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        output, _ = proc.communicate()
+        code = proc.returncode
+        return JSONResponse({"ok": code == 0, "code": code, "output": output, "cmd": args})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
 
 
 @app.post("/search", response_class=HTMLResponse)

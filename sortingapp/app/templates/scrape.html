@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Scrape Reviews</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <h1>Collect Reviews</h1>
+      <a href="/landing" class="button-like">Back</a>
+    </div>
+    <form method="post" action="/scrape/run">
+      <label>Company URL (Trustpilot)</label>
+      <input type="text" name="company_url" placeholder="https://www.trustpilot.com/review/example.com" required />
+
+      <label>Mode</label>
+      <select name="mode">
+        <option value="pages">Pages</option>
+        <option value="months">Months back</option>
+        <option value="keywords">Keywords</option>
+      </select>
+
+      <label>Max pages (for Pages mode)</label>
+      <input type="text" name="max_pages" placeholder="e.g. 10" />
+
+      <label>Months back (for Months mode)</label>
+      <input type="text" name="months" placeholder="e.g. 6" />
+
+      <label>Keywords (comma separated, for Keywords mode)</label>
+      <input type="text" name="keywords" placeholder="charge, fee, insurance" />
+
+      <label>Resume previous run?</label>
+      <select name="resume">
+        <option value="no">No</option>
+        <option value="yes">Yes</option>
+      </select>
+
+      <div class="menubar">
+        <button type="submit" onclick="startScrape(this)">Start Scrape</button>
+        <a href="/" class="button-like">Go to Sort/Analyze</a>
+      </div>
+    </form>
+
+    <div id="progress" class="progress hidden">
+      <div class="progress-bar"></div>
+      <div class="progress-text">Scraping… This may take a while on first run.</div>
+    </div>
+
+    <div id="scrape-log" class="card" style="display:none;">
+      <div class="reviewer">Log</div>
+      <pre id="log-text" class="text"></pre>
+    </div>
+  </div>
+  <script>
+    function startScrape(btn){
+      try { btn.disabled = true; btn.textContent = 'Starting…'; } catch(e){}
+      const p = document.getElementById('progress');
+      if(p){ p.classList.remove('hidden'); }
+    }
+  </script>
+</body>
+</html>
+
