@@ -29,6 +29,7 @@
 
     {% for r in rows %}
       <div class="card">
+        <button class="copy-btn" onclick="copyCard(this)">Copy</button>
         <div class="reviewer">{{ r.reviewer }}</div>
         <div class="date">{{ r.date }}</div>
         <div class="score">Match score: {{ '%.3f'|format(r.score) if r.score is not none else '' }}</div>
@@ -37,6 +38,25 @@
       </div>
     {% endfor %}
   </div>
+  <script>
+    function copyCard(btn){
+      const card = btn.closest('.card');
+      if(!card) return;
+      const reviewer = card.querySelector('.reviewer')?.textContent?.trim() || '';
+      const date = card.querySelector('.date')?.textContent?.trim() || '';
+      const score = card.querySelector('.score')?.textContent?.trim() || '';
+      const link = card.querySelector('.link a')?.getAttribute('href') || '';
+      const text = card.querySelector('.text')?.textContent?.trim() || '';
+      const blob = `Reviewer: ${reviewer}\nDate: ${date}\n${score}\nLink: ${link}\n\n${text}`;
+      navigator.clipboard.writeText(blob).then(()=>{
+        btn.textContent = 'Copied!';
+        setTimeout(()=>{ btn.textContent = 'Copy'; }, 1200);
+      }).catch(()=>{
+        btn.textContent = 'Copy failed';
+        setTimeout(()=>{ btn.textContent = 'Copy'; }, 1200);
+      });
+    }
+  </script>
 </body>
 </html>
 

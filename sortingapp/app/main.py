@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Tuple
 
 import orjson
+import subprocess
 import pandas as pd
 import numpy as np
 from bs4 import BeautifulSoup
@@ -16,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sentence_transformers import SentenceTransformer, util
 import torch
+import threading
 
 
 # Paths
@@ -32,6 +34,11 @@ STATIC_DIR = APP_DIR / "static"
 app = FastAPI(title="Review Sorting App")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# --- Scraper process state ---
+SCRAPE_PROC = None
+SCRAPE_LOCK = threading.Lock()
+SCRAPE_PAUSED = False
 
 
 def list_result_files() -> List[Path]:
@@ -192,10 +199,11 @@ async def scrape_run(
     keywords: str = Form(""),
     resume: str = Form("no"),
 ):
-    import subprocess, shlex
+    global SCRAPE_PROC
     # Build command
+    import sys
     script_path = str(APP_DIR / "scrape_reviews.py")
-    args = ["python", script_path, "--url", company_url]
+    args = [sys.executable, script_path, "--url", company_url]
     if mode == "pages" and max_pages.strip():
         args += ["--pages", max_pages.strip()]
     if mode == "months" and months.strip():
@@ -205,13 +213,52 @@ async def scrape_run(
     if resume == "yes":
         args += ["--resume"]
 
+    # If a previous process exists, terminate it
+    if SCRAPE_PROC and SCRAPE_PROC.poll() is None:
+        try:
+            SCRAPE_PROC.terminate()
+        except Exception:
+            pass
+
     try:
-        proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        output, _ = proc.communicate()
-        code = proc.returncode
-        return JSONResponse({"ok": code == 0, "code": code, "output": output, "cmd": args})
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
+        SCRAPE_PROC = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, env=env)
+        return JSONResponse({"ok": True, "cmd": args})
     except Exception as e:
+        SCRAPE_PROC = None
         return JSONResponse({"ok": False, "error": str(e)})
+
+@app.get("/scrape/stream")
+async def scrape_stream():
+    async def event_generator():
+        import asyncio
+        if SCRAPE_PROC is None or SCRAPE_PROC.stdout is None:
+            yield "data: {\"line\": \"No active scrape.\"}\n\n"
+            return
+        loop = asyncio.get_event_loop()
+        while True:
+            if SCRAPE_PROC.poll() is not None:
+                break
+            line = await loop.run_in_executor(None, SCRAPE_PROC.stdout.readline)
+            if not line:
+                await asyncio.sleep(0.1)
+                continue
+            payload = json.dumps({"line": line.rstrip()})
+            yield f"data: {payload}\n\n"
+        yield "data: {\"line\": \"[DONE]\"}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+@app.post("/scrape/stop")
+async def scrape_stop():
+    global SCRAPE_PROC
+    if SCRAPE_PROC and SCRAPE_PROC.poll() is None:
+        try:
+            SCRAPE_PROC.terminate()
+        except Exception:
+            pass
+    return {"ok": True}
 
 
 @app.post("/search", response_class=HTMLResponse)

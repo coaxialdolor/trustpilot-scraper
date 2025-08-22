@@ -52,9 +52,11 @@ def stable_review_key(reviewer: str, date_str: str, link: str, text: str) -> str
 
 
 def save_reviews(reviews, filename_base, mode=None, max_pages=None, months=None, keywords=None):
-    csv_file = f"{filename_base}.csv"
-    json_file = f"{filename_base}.json"
-    html_file = f"{filename_base}.html"
+    out_dir = Path(filename_base)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    csv_file = str(out_dir / "results.csv")
+    json_file = str(out_dir / "results.json")
+    html_file = str(out_dir / "results.html")
 
     # CSV
     with open(csv_file, "w", newline="", encoding="utf-8") as f:
@@ -126,7 +128,7 @@ def save_reviews(reviews, filename_base, mode=None, max_pages=None, months=None,
             """)
         f.write("</body></html>")
 
-    print(f"\n💾 Saved {len(reviews)} reviews to {csv_file}, {json_file}, {html_file}")
+    print(f"\n💾 Saved {len(reviews)} reviews to folder: {out_dir}")
 
 
 def load_previous_reviews(filename=None):
@@ -167,9 +169,14 @@ def maybe_click_see_more(driver, block):
 
 
 def extract_review_text(block):
-    ps = block.find_elements(By.CSS_SELECTOR, "p")
-    texts = [p.text.strip() for p in ps if p.text.strip()]
-    return max(texts, key=len) if texts else ""
+    # Prefer the main review paragraph; ignore 'See more' teaser content
+    try:
+        main = block.find_element(By.CSS_SELECTOR, "div[data-service-review-text-typography] p")
+        return main.text.strip()
+    except NoSuchElementException:
+        ps = block.find_elements(By.CSS_SELECTOR, "p")
+        texts = [p.text.strip() for p in ps if p.text.strip() and not p.text.strip().endswith("See more")]
+        return max(texts, key=len) if texts else ""
 
 
 # ----------------------- Scraper -----------------------
@@ -269,6 +276,9 @@ def scrape_reviews(base_url, mode, max_pages=None, months=None, keywords=None, r
 
                 reviewer = extract_reviewer_name(block)
                 text = extract_review_text(block)
+                # Skip teaser/empty reviews to avoid blank cards
+                if not text or text.endswith("See more"):
+                    continue
                 review_link = extract_review_permalink(block)
                 if review_link:
                     page_links_for_signature.append(canonical_link(review_link))
@@ -370,29 +380,31 @@ def scrape_reviews(base_url, mode, max_pages=None, months=None, keywords=None, r
 # ----------------------- Main -----------------------
 
 if __name__ == "__main__":
-    BASE_URL = "https://www.trustpilot.com/review/www.europcar.co.uk?stars=1"
+    import argparse
+    parser = argparse.ArgumentParser(description="Trustpilot scraper")
+    parser.add_argument("--url", dest="url", default="https://www.trustpilot.com/review/www.europcar.co.uk?stars=1")
+    parser.add_argument("--pages", dest="pages", default="", help="Number of pages (or 'all')")
+    parser.add_argument("--months", dest="months", type=str, default="", help="Months back")
+    parser.add_argument("--keywords", dest="keywords", type=str, default="", help="Comma separated keywords")
+    parser.add_argument("--resume", dest="resume", action="store_true")
+    args = parser.parse_args()
 
-    resume_choice = input("Resume previous scan if available? (y/n): ").strip().lower()
-    resume = resume_choice == "y"
+    base_url = args.url
+    resume = bool(args.resume)
 
-    print("Choose scraping mode:")
-    print("1. Pages")
-    print("2. Months back")
-    print("3. Keywords")
-    mode_in = input("Enter 1,2,3: ").strip()
-
-    if mode_in == "1":
-        pages_in = input("How many pages to scrape? (number or 'all'): ").strip().lower()
+    # Determine mode based on provided arguments
+    if args.pages:
+        pages_in = args.pages.strip().lower()
         max_pages = None if pages_in == "all" else int(pages_in)
-        scrape_reviews(BASE_URL, mode=1, max_pages=max_pages, resume=resume)
-    elif mode_in == "2":
-        months_in = int(input("How many months back? ").strip())
-        scrape_reviews(BASE_URL, mode=2, months=months_in, resume=resume)
-    elif mode_in == "3":
-        raw = input("Enter keywords (',' = OR, '+' or 'AND' = AND): ").strip()
-        keywords = [w.strip() for w in raw.split(",") if w.strip()]
-        scrape_reviews(BASE_URL, mode=3, keywords=keywords, resume=resume)
+        scrape_reviews(base_url, mode=1, max_pages=max_pages, resume=resume)
+    elif args.months:
+        months_in = int(args.months)
+        scrape_reviews(base_url, mode=2, months=months_in, resume=resume)
+    elif args.keywords:
+        kws = [w.strip() for w in args.keywords.split(",") if w.strip()]
+        scrape_reviews(base_url, mode=3, keywords=kws, resume=resume)
     else:
-        print("❌ Invalid choice. Exiting.")
+        # Default: pages=all
+        scrape_reviews(base_url, mode=1, max_pages=None, resume=resume)
 
 

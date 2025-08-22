@@ -41,7 +41,7 @@ free_port() {
   fi
 }
 
-# Free ports we might have used before (1789 new, 8000 legacy)
+# Free ports we might have used before (1789 new, 8000 legacy) BEFORE starting
 free_port $PORT
 free_port 8000
 
@@ -66,13 +66,10 @@ echo "-----------------------------------"
 tail -n 80 "$LOG_FILE" || true
 
 echo ""
-echo "Press Enter to stop the server and close this window..."
+echo "Server is running in the background."
+echo "Use 'Stop Server.command' to stop it and free the port."
+echo "Press Enter to close this window (server will keep running)..."
 read -r _
-kill "$SERVER_PID" 2>/dev/null || true
-/bin/sleep 1
-if kill -0 "$SERVER_PID" 2>/dev/null; then
-  kill -KILL "$SERVER_PID" 2>/dev/null || true
-fi
-echo "Done."
+exit 0
 
 

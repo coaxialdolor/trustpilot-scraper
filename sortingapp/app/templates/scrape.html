@@ -11,9 +11,9 @@
       <h1>Collect Reviews</h1>
       <a href="/landing" class="button-like">Back</a>
     </div>
-    <form method="post" action="/scrape/run">
+    <form id="scrape-form" method="post" action="/scrape/run" onsubmit="return startScrapeSubmit(event)">
       <label>Company URL (Trustpilot)</label>
-      <input type="text" name="company_url" placeholder="https://www.trustpilot.com/review/example.com" required />
+      <input type="text" name="company_url" value="https://www.trustpilot.com/review/www.europcar.co.uk?stars=1" placeholder="https://www.trustpilot.com/review/example.com" required />
 
       <label>Mode</label>
       <select name="mode">
@@ -39,6 +39,7 @@
 
       <div class="menubar">
         <button type="submit" onclick="startScrape(this)">Start Scrape</button>
+        <button type="button" onclick="stopScrape()" class="danger">Stop</button>
         <a href="/" class="button-like">Go to Sort/Analyze</a>
       </div>
     </form>
@@ -49,15 +50,57 @@
     </div>
 
     <div id="scrape-log" class="card" style="display:none;">
-      <div class="reviewer">Log</div>
-      <pre id="log-text" class="text"></pre>
+      <div class="reviewer">Live progress</div>
+      <pre id="log-text" class="text" style="height: 12em; overflow:auto; margin:0;"></pre>
     </div>
   </div>
   <script>
-    function startScrape(btn){
+    async function startScrapeSubmit(ev){
+      ev.preventDefault();
+      const btn = ev.target.querySelector('button[type="submit"]');
       try { btn.disabled = true; btn.textContent = 'Starting…'; } catch(e){}
       const p = document.getElementById('progress');
       if(p){ p.classList.remove('hidden'); }
+      const form = document.getElementById('scrape-form');
+      const fd = new FormData(form);
+      try {
+        const res = await fetch('/scrape/run', { method: 'POST', body: fd });
+        const js = await res.json().catch(()=>({}));
+        // Start log streaming regardless; backend returns quickly
+        streamLogs();
+      } catch(err) {
+        // Still try to stream in case it started
+        streamLogs();
+      }
+      return false;
+    }
+
+    function streamLogs(){
+      const logBox = document.getElementById('scrape-log');
+      const pre = document.getElementById('log-text');
+      logBox.style.display = 'block';
+      const evt = new EventSource('/scrape/stream');
+      evt.onmessage = (e)=>{
+        try{
+          const data = JSON.parse(e.data);
+          if(data.line){
+            pre.textContent += (pre.textContent ? "\n" : "") + data.line;
+            pre.scrollTop = pre.scrollHeight;
+            if(data.line === '[DONE]'){
+              evt.close();
+              const p = document.getElementById('progress');
+              if(p){ p.classList.add('hidden'); }
+              const btn = document.querySelector('#scrape-form button[type="submit"]');
+              if(btn){ btn.disabled = false; btn.textContent = 'Start Scrape'; }
+            }
+          }
+        }catch(err){}
+      };
+      evt.onerror = ()=>{ evt.close(); };
+    }
+
+    function stopScrape(){
+      fetch('/scrape/stop', {method:'POST'});
     }
   </script>
 </body>
