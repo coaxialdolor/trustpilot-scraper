@@ -1,0 +1,19 @@
+# Scraping results
+europcar_reviews_*.csv
+europcar_reviews_*.json
+europcar_reviews_*.html
+
+# Backups created by dedupe tool
+*.bak
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments (if present)
+venv/
+.venv/
+
+
