@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Review Sorting App</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="container">
+    <h1>Review Sorting App</h1>
+    <form method="post" action="/search" enctype="multipart/form-data">
+      <label>Choose file from list (or upload below)</label>
+      <select name="file_path">
+        {% for f in files %}
+          <option value="{{ f }}">{{ f.name }}</option>
+        {% endfor %}
+      </select>
+
+      <label>Or upload a file (CSV/JSON/HTML)</label>
+      <input type="file" name="upload" accept=".csv,.json,.html" />
+
+      <label>Query (natural language)</label>
+      <input type="text" name="query" placeholder="e.g. unexpected charges" required />
+
+      <label>AI Model</label>
+      <select name="model_type" onchange="updateModelInfo(this.value)">
+        {% for key, config in model_configs.items() %}
+          <option value="{{ key }}" {% if key == default_model %}selected{% endif %}>
+            {{ config.description }} ({{ config.size }})
+          </option>
+        {% endfor %}
+      </select>
+      <div id="model-info" class="model-info">
+        <small>Select a model based on your needs: speed vs. accuracy</small>
+      </div>
+
+      <label>Match threshold</label>
+      <input type="range" name="threshold" min="0" max="1" step="0.01" value="{{ default_threshold }}" oninput="this.nextElementSibling.value=this.value" />
+      <output>{{ default_threshold }}</output>
+
+      <label>Sort by</label>
+      <select name="sort_by">
+        <option value="score_desc">Match score (desc)</option>
+        <option value="score_asc">Match score (asc)</option>
+        <option value="date_desc">Date (newest)</option>
+        <option value="date_asc">Date (oldest)</option>
+        <option value="reviewer_asc">Reviewer (A→Z)</option>
+        <option value="reviewer_desc">Reviewer (Z→A)</option>
+      </select>
+      <div class="menubar">
+        <button type="submit" onclick="startProgress(this)">Search</button>
+        <button type="button" onclick="fetch('/shutdown', {method:'POST'}).then(()=>window.close())" class="danger">Shut down server</button>
+        <button type="button" onclick="location.reload()">Restart server (reload)</button>
+      </div>
+    </form>
+    <div id="progress" class="progress hidden">
+      <div class="progress-bar"></div>
+      <div class="progress-text">Processing with AI…</div>
+    </div>
+  </div>
+
+  <script>
+    const modelConfigs = {{ model_configs | tojson }};
+
+    function updateModelInfo(modelType) {
+      const config = modelConfigs[modelType];
+      const infoDiv = document.getElementById('model-info');
+      if (config) {
+        infoDiv.innerHTML = `<small><strong>${config.description}</strong><br>Size: ${config.size}, Batch size: ${config.batch_size}</small>`;
+      }
+    }
+
+    // Initialize with default model info
+    updateModelInfo('{{ default_model }}');
+
+    function startProgress(btn){
+      try { btn.disabled = true; btn.textContent = 'Processing…'; } catch(e){}
+      const p = document.getElementById('progress');
+      if(p){ p.classList.remove('hidden'); }
+      // Submit after showing progress (defer a tick)
+      setTimeout(()=>{ btn.form.submit(); }, 50);
+    }
+  </script>
+</body>
+</html>
+
+
