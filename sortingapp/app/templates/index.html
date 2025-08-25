@@ -8,7 +8,7 @@
 <body>
   <div class="container">
     <h1>Review Sorting App</h1>
-    <form method="post" action="/search" enctype="multipart/form-data">
+    <form method="post" action="/search" enctype="multipart/form-data" onsubmit="onSubmitSearch(event)">
       <label>Choose file from list (or upload below)</label>
       <select name="file_path">
         {% for f in files %}
@@ -37,6 +37,11 @@
       <label>Match threshold</label>
       <input type="range" name="threshold" min="0" max="1" step="0.01" value="{{ default_threshold }}" oninput="this.nextElementSibling.value=this.value" />
       <output>{{ default_threshold }}</output>
+
+      <label><input type="checkbox" name="use_nli" id="use_nli" /> High-precision verification (zero-shot NLI)</label>
+      <div id="nli-info" class="model-info" style="display:none;">
+        <small>Slower: verifies each top result against the statement “The reviewer received a refund/chargeback from their card issuer/bank”.</small>
+      </div>
 
       <label>Sort by</label>
       <select name="sort_by">
@@ -77,8 +82,28 @@
       try { btn.disabled = true; btn.textContent = 'Processing…'; } catch(e){}
       const p = document.getElementById('progress');
       if(p){ p.classList.remove('hidden'); }
-      // Submit after showing progress (defer a tick)
+      // Show step text updates if NLI enabled
+      const useNli = document.getElementById('use_nli')?.checked;
+      const text = document.querySelector('#progress .progress-text');
+      if(useNli && text){ text.textContent = 'Step 1/2: Retrieving candidates…'; }
       setTimeout(()=>{ btn.form.submit(); }, 50);
+    }
+
+    function onSubmitSearch(ev){
+      const useNli = document.getElementById('use_nli')?.checked;
+      if(useNli){
+        const text = document.querySelector('#progress .progress-text');
+        if(text){
+          setTimeout(()=>{ text.textContent = 'Step 2/2: Verifying candidates (NLI)…'; }, 1500);
+        }
+      }
+    }
+
+    // Toggle NLI info
+    const nliBox = document.getElementById('use_nli');
+    const nliInfo = document.getElementById('nli-info');
+    if(nliBox){
+      nliBox.addEventListener('change', ()=>{ nliInfo.style.display = nliBox.checked ? 'block' : 'none'; });
     }
   </script>
 </body>

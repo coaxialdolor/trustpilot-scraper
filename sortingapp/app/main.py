@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, Stre
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sentence_transformers import SentenceTransformer, util
+from transformers import pipeline
 import torch
 import threading
 
@@ -110,6 +111,7 @@ MODEL_CONFIGS = {
 
 # Global model cache
 MODEL_CACHE = {}
+NLI_PIPELINE = None
 
 def load_model(model_type: str = "fast") -> SentenceTransformer:
     """Load a model, caching it for reuse"""
@@ -169,6 +171,21 @@ def semantic_filter(df: pd.DataFrame, query: str, model_type: str = "fast") -> T
     df["score"] = scores
     print(f"AI processing complete. Score range: {scores.min():.3f} to {scores.max():.3f}")
     return df, scores
+
+def get_nli_pipeline():
+    global NLI_PIPELINE
+    if NLI_PIPELINE is not None:
+        return NLI_PIPELINE
+    device = 0 if torch.cuda.is_available() else -1
+    # Use MNLI model for pairwise entailment
+    NLI_PIPELINE = pipeline(
+        "text-classification",
+        model="facebook/bart-large-mnli",
+        return_all_scores=True,
+        device=device,
+        truncation=True
+    )
+    return NLI_PIPELINE
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -301,7 +318,8 @@ async def search(
     sort_by: str = Form("score_desc"),
     threshold: float = Form(0.35),
     model_type: str = Form("fast"),
-    upload: UploadFile | None = File(None)
+    upload: UploadFile | None = File(None),
+    use_nli: bool = Form(False)
 ):
     # Determine source: uploaded file takes precedence, otherwise path
     temp_uploaded: Path | None = None
@@ -317,6 +335,25 @@ async def search(
     filtered, scores = semantic_filter(df, query, model_type)
     # Apply threshold
     filtered = filtered[filtered["score"] >= float(threshold)]
+
+    # Optional zero-shot NLI verification for higher precision
+    if use_nli and not filtered.empty:
+        print("Running zero-shot NLI verifier on top candidates…")
+        nli = get_nli_pipeline()
+        hypothesis = "The reviewer received a refund or chargeback from their card issuer or bank."
+        texts = filtered["text"].fillna("").astype(str).tolist()
+        # Run in mini-batches to keep UI responsive
+        keep_mask = []
+        for t in texts:
+            try:
+                scores_all = nli({"text": t, "text_pair": hypothesis})
+                # scores_all -> list of dicts per label; extract entailment
+                label_to_score = {d["label"].lower(): d["score"] for d in scores_all[0]}
+                entail = max(label_to_score.get("entailment", 0.0), 0.0)
+                keep_mask.append(entail >= 0.6)
+            except Exception as e:
+                keep_mask.append(False)
+        filtered = filtered[keep_mask]
 
     # Sorting
     if sort_by == "score_desc":

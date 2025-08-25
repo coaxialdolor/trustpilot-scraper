@@ -20,6 +20,7 @@ venv/
 results.csv
 results.json
 results.html
+*result*.json
 
 # macOS system files
 .DS_Store

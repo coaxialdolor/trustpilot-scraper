@@ -14,3 +14,7 @@ orjson==3.10.7
 selenium==4.23.1
 webdriver-manager==4.0.2
 
+# Zero-shot NLI verification
+transformers==4.42.4
+torch==2.3.1
+
