@@ -51,7 +51,7 @@ def stable_review_key(reviewer: str, date_str: str, link: str, text: str) -> str
     return f"hash::{digest}"
 
 
-def save_reviews(reviews, filename_base, mode=None, max_pages=None, months=None, keywords=None):
+def save_reviews(reviews, filename_base, mode=None, max_pages=None, months=None, keywords=None, start_date=None, end_date=None):
     out_dir = Path(filename_base)
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_file = str(out_dir / "results.csv")
@@ -87,6 +87,8 @@ def save_reviews(reviews, filename_base, mode=None, max_pages=None, months=None,
             else:
                 keyword_display.append(f"{k} (OR)")
         criteria_text = f"<strong>Search criteria:</strong> Keywords - {', '.join(keyword_display)}<br>"
+    elif mode == 4 and start_date and end_date:
+        criteria_text = f"<strong>Search criteria:</strong> Date interval from {start_date} to {end_date}<br>"
 
     # HTML
     with open(html_file, "w", encoding="utf-8") as f:
@@ -181,10 +183,12 @@ def extract_review_text(block):
 
 # ----------------------- Scraper -----------------------
 
-def scrape_reviews(base_url, mode, max_pages=None, months=None, keywords=None, resume=False, headless=True):
+def scrape_reviews(base_url, mode, max_pages=None, months=None, keywords=None, resume=False, headless=True, start_date=None, end_date=None, resume_file=None):
     reviews = []
     seen_keys = set()
     cutoff_date = datetime.now() - timedelta(days=30 * months) if months else None
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d") if start_date else None
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
 
     options = webdriver.ChromeOptions()
     if headless:
@@ -200,14 +204,19 @@ def scrape_reviews(base_url, mode, max_pages=None, months=None, keywords=None, r
 
     filename_base = make_filename("europcar_reviews", mode, max_pages, months, keywords)
     if resume:
-        json_files = glob.glob("europcar_reviews_*.json")
-        if json_files:
-            latest_file = max(json_files, key=os.path.getctime)
-            reviews = load_previous_reviews(latest_file)
+        source_json = None
+        if resume_file and Path(resume_file).exists():
+            source_json = str(resume_file)
+        else:
+            json_files = glob.glob("europcar_reviews_*/results.json") + glob.glob("europcar_reviews_*.json")
+            if json_files:
+                source_json = max(json_files, key=os.path.getctime)
+        if source_json:
+            reviews = load_previous_reviews(source_json)
             for r in reviews:
                 key = stable_review_key(r.get("reviewer", ""), r.get("date", ""), r.get("link", ""), r.get("text", ""))
                 seen_keys.add(key)
-            print(f"🔄 Resuming from {latest_file}")
+            print(f"🔄 Resuming from {source_json}")
 
     # Prepare keyword filters
     keyword_and = []
@@ -293,6 +302,11 @@ def scrape_reviews(base_url, mode, max_pages=None, months=None, keywords=None, r
 
                 if cutoff_date and review_date >= cutoff_date:
                     page_all_older_than_cutoff = False
+                # Date interval filtering
+                if start_dt and review_date < start_dt:
+                    continue
+                if end_dt and review_date > end_dt:
+                    continue
 
                 # Keyword filter logic (AND + OR)
                 add_review = True
@@ -321,7 +335,7 @@ def scrape_reviews(base_url, mode, max_pages=None, months=None, keywords=None, r
 
             print(f"📄 Page {page}: found {page_found} cards, added {page_added} reviews (total: {len(reviews)})")
 
-            save_reviews(reviews, filename_base, mode, max_pages, months, keywords)
+            save_reviews(reviews, filename_base, mode, max_pages, months, keywords, start_date=start_date, end_date=end_date)
 
             # Build a stable signature of this page's content to detect last page loops
             page_signature = tuple(page_links_for_signature[:20])  # top 20 links are enough
@@ -372,7 +386,7 @@ def scrape_reviews(base_url, mode, max_pages=None, months=None, keywords=None, r
         driver.quit()
         if 'interrupted' in locals() and interrupted:
             print(f"ℹ️ Collected {len(reviews)} reviews before interrupt.")
-        save_reviews(reviews, filename_base, mode, max_pages, months, keywords)
+        save_reviews(reviews, filename_base, mode, max_pages, months, keywords, start_date=start_date, end_date=end_date)
 
     return reviews
 
@@ -387,6 +401,9 @@ if __name__ == "__main__":
     parser.add_argument("--months", dest="months", type=str, default="", help="Months back")
     parser.add_argument("--keywords", dest="keywords", type=str, default="", help="Comma separated keywords")
     parser.add_argument("--resume", dest="resume", action="store_true")
+    parser.add_argument("--resume_file", dest="resume_file", type=str, default="", help="Path to prior results.json")
+    parser.add_argument("--start_date", dest="start_date", type=str, default="", help="Start date YYYY-MM-DD")
+    parser.add_argument("--end_date", dest="end_date", type=str, default="", help="End date YYYY-MM-DD")
     args = parser.parse_args()
 
     base_url = args.url
@@ -396,15 +413,17 @@ if __name__ == "__main__":
     if args.pages:
         pages_in = args.pages.strip().lower()
         max_pages = None if pages_in == "all" else int(pages_in)
-        scrape_reviews(base_url, mode=1, max_pages=max_pages, resume=resume)
+        scrape_reviews(base_url, mode=1, max_pages=max_pages, resume=resume, resume_file=args.resume_file or None)
     elif args.months:
         months_in = int(args.months)
-        scrape_reviews(base_url, mode=2, months=months_in, resume=resume)
+        scrape_reviews(base_url, mode=2, months=months_in, resume=resume, resume_file=args.resume_file or None)
     elif args.keywords:
         kws = [w.strip() for w in args.keywords.split(",") if w.strip()]
-        scrape_reviews(base_url, mode=3, keywords=kws, resume=resume)
+        scrape_reviews(base_url, mode=3, keywords=kws, resume=resume, resume_file=args.resume_file or None)
+    elif args.start_date and args.end_date:
+        scrape_reviews(base_url, mode=4, start_date=args.start_date, end_date=args.end_date, resume=resume, resume_file=args.resume_file or None)
     else:
         # Default: pages=all
-        scrape_reviews(base_url, mode=1, max_pages=None, resume=resume)
+        scrape_reviews(base_url, mode=1, max_pages=None, resume=resume, resume_file=args.resume_file or None)
 
 

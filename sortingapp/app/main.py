@@ -190,6 +190,19 @@ async def landing(request: Request):
 async def scrape_page(request: Request):
     return templates.TemplateResponse("scrape.html", {"request": request})
 
+@app.get("/scrape/suggestions")
+async def scrape_suggestions():
+    # Find prior run result JSON files
+    results: list[str] = []
+    try:
+        for folder in sorted(DATA_DIR.glob("europcar_reviews_*")):
+            if folder.is_dir():
+                for f in folder.glob("results.json"):
+                    results.append(str(f))
+    except Exception:
+        pass
+    return {"files": results[-200:]}  # limit to last 200
+
 @app.post("/scrape/run")
 async def scrape_run(
     company_url: str = Form(...),
@@ -198,6 +211,10 @@ async def scrape_run(
     months: str = Form(""),
     keywords: str = Form(""),
     resume: str = Form("no"),
+    resume_suggested: str = Form(""),
+    start_date: str = Form(""),
+    end_date: str = Form(""),
+    resume_file: UploadFile | None = File(None),
 ):
     global SCRAPE_PROC
     # Build command
@@ -210,8 +227,22 @@ async def scrape_run(
         args += ["--months", months.strip()]
     if mode == "keywords" and keywords.strip():
         args += ["--keywords", keywords.strip()]
+    if mode == "dates" and start_date.strip() and end_date.strip():
+        args += ["--start_date", start_date.strip(), "--end_date", end_date.strip()]
     if resume == "yes":
         args += ["--resume"]
+        resume_path: str | None = None
+        # Uploaded file takes precedence
+        if resume_file is not None and resume_file.filename:
+            tmp_path = PROJECT_DIR / f"_resume_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{resume_file.filename}"
+            content = await resume_file.read()
+            with open(tmp_path, "wb") as f:
+                f.write(content)
+            resume_path = str(tmp_path)
+        elif resume_suggested.strip():
+            resume_path = resume_suggested.strip()
+        if resume_path:
+            args += ["--resume_file", resume_path]
 
     # If a previous process exists, terminate it
     if SCRAPE_PROC and SCRAPE_PROC.poll() is None:

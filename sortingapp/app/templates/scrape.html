@@ -20,6 +20,7 @@
         <option value="pages">Pages</option>
         <option value="months">Months back</option>
         <option value="keywords">Keywords</option>
+        <option value="dates">Date interval</option>
       </select>
 
       <label>Max pages (for Pages mode)</label>
@@ -31,11 +32,27 @@
       <label>Keywords (comma separated, for Keywords mode)</label>
       <input type="text" name="keywords" placeholder="charge, fee, insurance" />
 
-      <label>Resume previous run?</label>
-      <select name="resume">
-        <option value="no">No</option>
-        <option value="yes">Yes</option>
-      </select>
+      <div id="date-range" style="display:none;">
+        <label>Start date (for Date interval mode)</label>
+        <input type="date" name="start_date" />
+        <label>End date (for Date interval mode)</label>
+        <input type="date" name="end_date" />
+      </div>
+
+      <fieldset>
+        <legend>Resume previous run?</legend>
+        <label><input type="radio" name="resume" value="no" checked /> No</label>
+        <label><input type="radio" name="resume" value="yes" /> Yes</label>
+      </fieldset>
+
+      <div id="resume-options" style="display:none;">
+        <label>Suggested previous runs</label>
+        <select name="resume_suggested" id="resume_suggested">
+          <option value="">-- select a previous run --</option>
+        </select>
+        <label>Or choose a file (.json) from your computer</label>
+        <input type="file" name="resume_file" accept=".json" />
+      </div>
 
       <div class="menubar">
         <button type="submit" onclick="startScrape(this)">Start Scrape</button>
@@ -102,6 +119,40 @@
     function stopScrape(){
       fetch('/scrape/stop', {method:'POST'});
     }
+
+    // Dynamic UI behavior
+    const modeEl = document.querySelector('select[name="mode"]');
+    const dateRange = document.getElementById('date-range');
+    function updateModeFields(){
+      dateRange.style.display = modeEl.value === 'dates' ? 'block' : 'none';
+    }
+    modeEl.addEventListener('change', updateModeFields);
+    updateModeFields();
+
+    // Resume radio toggle and fetch suggestions
+    const resumeRadios = document.querySelectorAll('input[name="resume"]');
+    const resumeBox = document.getElementById('resume-options');
+    function updateResume(){
+      const val = document.querySelector('input[name="resume"]:checked').value;
+      if(val === 'yes'){
+        resumeBox.style.display = 'block';
+        // Load suggestions
+        fetch('/scrape/suggestions').then(r=>r.json()).then(js=>{
+          const sel = document.getElementById('resume_suggested');
+          sel.innerHTML = '<option value="">-- select a previous run --</option>';
+          (js.files||[]).forEach(p=>{
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.textContent = p;
+            sel.appendChild(opt);
+          });
+        }).catch(()=>{});
+      } else {
+        resumeBox.style.display = 'none';
+      }
+    }
+    resumeRadios.forEach(r=>r.addEventListener('change', updateResume));
+    updateResume();
   </script>
 </body>
 </html>
