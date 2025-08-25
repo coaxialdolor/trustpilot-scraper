@@ -190,6 +190,31 @@ async def landing(request: Request):
 async def scrape_page(request: Request):
     return templates.TemplateResponse("scrape.html", {"request": request})
 
+def _find_latest_results_folder() -> Path | None:
+    candidates: list[Path] = []
+    for p in DATA_DIR.glob("europcar_reviews_*"):
+        if p.is_dir() and (p / "results.json").exists():
+            candidates.append(p)
+    if not candidates:
+        return None
+    return max(candidates, key=lambda p: p.stat().st_mtime)
+
+@app.get("/scrape/download_last")
+async def scrape_download_last():
+    folder = _find_latest_results_folder()
+    if not folder:
+        return JSONResponse({"ok": False, "error": "No results found"}, status_code=404)
+    import io, zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as z:
+        for name in ("results.csv", "results.json", "results.html"):
+            fp = folder / name
+            if fp.exists():
+                z.writestr(name, fp.read_bytes())
+    buf.seek(0)
+    headers = {"Content-Disposition": f"attachment; filename={folder.name}.zip"}
+    return StreamingResponse(buf, media_type="application/zip", headers=headers)
+
 @app.get("/scrape/suggestions")
 async def scrape_suggestions():
     # Find prior run result JSON files

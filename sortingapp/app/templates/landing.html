@@ -13,9 +13,17 @@
       <div class="menubar" style="justify-content:center;">
         <a href="/scrape" class="btn">Collect Reviews (Scrape)</a>
         <a href="/" class="btn alt">Sort & Analyze Reviews</a>
+        <button type="button" class="btn danger" onclick="shutdownSrv()">Shutdown Server</button>
       </div>
     </div>
   </div>
+  <script>
+  function shutdownSrv(){
+    fetch('/shutdown', {method:'POST'}).then(()=>{
+      alert('Server is shutting down…');
+    }).catch(()=>{})
+  }
+  </script>
 </body>
 </html>
 

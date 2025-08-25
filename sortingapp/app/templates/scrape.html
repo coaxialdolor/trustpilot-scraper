@@ -75,6 +75,9 @@
     <div id="scrape-log" class="card" style="display:none;">
       <div class="reviewer">Live progress</div>
       <pre id="log-text" class="text" style="height: 12em; overflow:auto; margin:0;"></pre>
+      <div class="menubar" style="margin-top:10px; display:none;" id="dlbar">
+        <a class="btn" href="/scrape/download_last">Download last results (ZIP)</a>
+      </div>
     </div>
   </div>
   <script>
@@ -115,6 +118,8 @@
               if(p){ p.classList.add('hidden'); }
               const btn = document.querySelector('#scrape-form button[type="submit"]');
               if(btn){ btn.disabled = false; btn.textContent = 'Start Scrape'; }
+              const dlbar = document.getElementById('dlbar');
+              if(dlbar){ dlbar.style.display = 'flex'; }
             }
           }
         }catch(err){}
