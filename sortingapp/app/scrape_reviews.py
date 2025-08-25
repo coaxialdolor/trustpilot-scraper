@@ -15,16 +15,18 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 # ----------------------- Helpers -----------------------
 
-def make_filename(prefix, mode, pages=None, months=None, keywords=None):
+def make_filename(prefix, mode, pages=None, months=None, keywords=None, start_date=None, end_date=None):
     parts = [prefix]
     if mode == 1 and pages:
         parts.append(f"pages-{pages}")
     if mode == 2 and months:
         parts.append(f"months-{months}")
-    if mode == 3 and keywords:
+    if keywords:
         # Join keywords with ',_' exactly once, keep multi-word keywords intact
         clean_keys = ",_".join([k.strip().replace(" ", "_") for k in keywords])
         parts.append(f"keywords-{clean_keys}")
+    if mode == 4 and start_date and end_date:
+        parts.append(f"dates-{start_date}_to_{end_date}")
     parts.append(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
     return "_".join(parts)
 
@@ -202,7 +204,7 @@ def scrape_reviews(base_url, mode, max_pages=None, months=None, keywords=None, r
     page = 1
     interrupted = False
 
-    filename_base = make_filename("europcar_reviews", mode, max_pages, months, keywords)
+    filename_base = make_filename("europcar_reviews", mode, max_pages, months, keywords, start_date, end_date)
     if resume:
         source_json = None
         if resume_file and Path(resume_file).exists():

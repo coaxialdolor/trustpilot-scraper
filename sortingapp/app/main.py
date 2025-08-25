@@ -225,7 +225,8 @@ async def scrape_run(
         args += ["--pages", max_pages.strip()]
     if mode == "months" and months.strip():
         args += ["--months", months.strip()]
-    if mode == "keywords" and keywords.strip():
+    # Pass keywords regardless of mode when provided and keyword filter is enabled
+    if keywords.strip():
         args += ["--keywords", keywords.strip()]
     if mode == "dates" and start_date.strip() and end_date.strip():
         args += ["--start_date", start_date.strip(), "--end_date", end_date.strip()]

@@ -15,7 +15,7 @@
       <label>Company URL (Trustpilot)</label>
       <input type="text" name="company_url" value="https://www.trustpilot.com/review/www.europcar.co.uk?stars=1" placeholder="https://www.trustpilot.com/review/example.com" required />
 
-      <label>Mode</label>
+      <label>Time/Page criteria</label>
       <select name="mode">
         <option value="pages">Pages</option>
         <option value="months">Months back</option>
@@ -29,8 +29,14 @@
       <label>Months back (for Months mode)</label>
       <input type="text" name="months" placeholder="e.g. 6" />
 
-      <label>Keywords (comma separated, for Keywords mode)</label>
-      <input type="text" name="keywords" placeholder="charge, fee, insurance" />
+      <div id="kw-section">
+        <label><input type="checkbox" id="kw-toggle" checked /> Filter by keywords</label>
+        <div id="kw-fields">
+          <label>Keywords (comma separated)</label>
+          <input type="text" name="keywords" placeholder="e.g. charge, fee, insurance or +extra AND service" />
+          <div class="help">Case-insensitive. Use +word or AND to require a term; commas mean OR.</div>
+        </div>
+      </div>
 
       <div id="date-range" style="display:none;">
         <label>Start date (for Date interval mode)</label>
@@ -128,6 +134,13 @@
     }
     modeEl.addEventListener('change', updateModeFields);
     updateModeFields();
+
+    // Keywords toggle
+    const kwToggle = document.getElementById('kw-toggle');
+    const kwFields = document.getElementById('kw-fields');
+    function updateKw(){ kwFields.style.display = kwToggle.checked ? 'block' : 'none'; }
+    kwToggle.addEventListener('change', updateKw);
+    updateKw();
 
     // Resume radio toggle and fetch suggestions
     const resumeRadios = document.querySelectorAll('input[name="resume"]');
